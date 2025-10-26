@@ -93,7 +93,48 @@ export default function GoldTradeJournal(){
   const visible = useMemo(()=> filtered.slice(0,showN), [filtered,showN])
   const canLoadMore = visible.length < filtered.length
 
-  const stats = useMemo(()=>{ const rows=filtered; const count=rows.length; const wins=rows.filter(t=>t.profit>0); const losses=rows.filter(t=>t.profit<0); const w=wins.length; const l=losses.length; const netUSD=rows.reduce((a,t)=>a+t.profit,0); const netTHB=rows.reduce((a,t)=>a+t.profitThb,0); const avgWin=w?wins.reduce((a,t)=>a+t.profit,0)/w:0; const avgLose=l?losses.reduce((a,t)=>a+t.profit,0)/l:0; const winRate=count?Math.round(w*100/count):0; return {count,w,l,netUSD,netTHB,avgWin,avgLose,winRate} },[filtered])
+    const stats = useMemo(()=>{
+    const rows=filtered;
+    const count=rows.length;
+    const wins=rows.filter(t=>t.profit>0);
+    const losses=rows.filter(t=>t.profit<0);
+    const w=wins.length;
+    const l=losses.length;
+
+    const grossProfit = wins.reduce((a,t)=>a+t.profit,0);
+    const grossLoss = losses.reduce((a,t)=>a+t.profit,0); // This will be a negative number
+
+    const netUSD=grossProfit + grossLoss;
+    const netTHB=rows.reduce((a,t)=>a+t.profitThb,0);
+
+    const avgWin=w?grossProfit/w:0;
+    const avgLose=l?grossLoss/l:0;
+    const winRate=count?Math.round(w*100/count):0;
+    const avgTrade=count?netUSD/count:0;
+    const profitFactor=grossLoss===0? (grossProfit>0?Infinity:0) : (grossProfit / Math.abs(grossLoss));
+    const largestWin=w?Math.max(...wins.map(t=>t.profit)):0;
+    const largestLoss=l?Math.min(...losses.map(t=>t.profit)):0;
+
+    // Max Drawdown Calculation
+    const sortedTrades = [...rows].sort((a,b)=>a.dateISO<b.dateISO?-1:1); // Sort by date ascending
+    let peak = settings.startingBalanceUSD;
+    let maxDrawdown = 0;
+    let currentBalance = settings.startingBalanceUSD;
+    for(const trade of sortedTrades){
+      currentBalance += trade.profit;
+      if(currentBalance > peak){
+        peak = currentBalance;
+      }
+      const drawdown = peak - currentBalance;
+      if(drawdown > maxDrawdown){
+        maxDrawdown = drawdown;
+      }
+    }
+
+    return {count,w,l,netUSD,netTHB,avgWin,avgLose,winRate,
+      grossProfit, grossLoss, avgTrade, profitFactor, largestWin, largestLoss, maxDrawdown
+    }
+  },[filtered, settings.startingBalanceUSD])
 
   const currentBalanceUSD=settings.startingBalanceUSD+stats.netUSD
   const currentBalanceTHB=usdThb?currentBalanceUSD*(usdThb||0):0
@@ -123,14 +164,31 @@ export default function GoldTradeJournal(){
             {/* Quick Overview - 4 flat cards */}
             <section>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <FlatCard color="bg-rose-100" icon={<DollarSign className="text-rose-500" />} value={`${currentBalanceUSD.toFixed(2)} USD`} label="Total Balance" sub={usdThb? `${currentBalanceTHB.toFixed(2)} THB`:'— THB'} />
+                                <FlatCard color="bg-rose-100" icon={<DollarSign className="text-rose-500" />} value={`${currentBalanceUSD.toFixed(2)} USD`} label="Total Balance" sub={usdThb? `${currentBalanceTHB.toFixed(2)} THB`:'— THB'} />
                 <FlatCard color="bg-emerald-100" icon={<TrendingUp className="text-emerald-500" />} value={fmtPL(stats.netUSD)} label="Net Profit (USD)" sub={fmtPL(stats.netTHB)} />
                 <FlatCard color="bg-blue-100" icon={<Activity className="text-blue-500" />} value={`${stats.winRate}%`} label="Win Rate" sub={`${stats.w} ชนะ / ${stats.l} แพ้`} />
                 <FlatCard color="bg-amber-100" icon={<PieChart className="text-amber-500" />} value={stats.count} label="Total Trades" sub="จำนวนรายการ" />
+                <FlatCard color="bg-purple-100" icon={<Activity className="text-purple-500" />} value={`${stats.maxDrawdown.toFixed(2)} USD`} label="Max Drawdown" sub="การขาดทุนสูงสุดจากยอดสูงสุด" />
+                <FlatCard color="bg-orange-100" icon={<TrendingUp className="text-orange-500" />} value={Number.isFinite(stats.profitFactor)?stats.profitFactor.toFixed(2):'Inf'} label="Profit Factor" sub="กำไรขั้นต้น / ขาดทุนขั้นต้น" />
+                <FlatCard color="bg-cyan-100" icon={<DollarSign className="text-cyan-500" />} value={stats.avgTrade.toFixed(2)} label="Avg. Trade (USD)" sub="กำไร/ขาดทุนเฉลี่ยต่อรายการ" />
               </div>
             </section>
 
             {/* Add Trade */}
+            <section className="bg-white border rounded-lg p-4">
+              <h3 className="font-medium mb-3">สถิติโดยละเอียด</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+                <StatItem label="กำไรขั้นต้น (Gross Profit)" value={stats.grossProfit.toFixed(2)} color="text-emerald-600" />
+                <StatItem label="ขาดทุนขั้นต้น (Gross Loss)" value={stats.grossLoss.toFixed(2)} color="text-red-600" />
+                <StatItem label="ชนะสูงสุด (Largest Win)" value={stats.largestWin.toFixed(2)} color="text-emerald-600" />
+                <StatItem label="แพ้สูงสุด (Largest Loss)" value={stats.largestLoss.toFixed(2)} color="text-red-600" />
+                <StatItem label="Avg. Win" value={stats.avgWin.toFixed(2)} color="text-emerald-600" />
+                <StatItem label="Avg. Loss" value={stats.avgLose.toFixed(2)} color="text-red-600" />
+                <StatItem label="Ratio (Avg Win/Loss)" value={stats.avgLose===0?'Inf':(Math.abs(stats.avgWin/stats.avgLose)).toFixed(2)} color="text-blue-600" />
+                <StatItem label="Expectancy" value={(stats.winRate/100*stats.avgWin + (1-stats.winRate/100)*stats.avgLose).toFixed(2)} color="text-violet-600" />
+              </div>
+            </section>
+
             <section className="bg-white border rounded-lg p-4">
               <h3 className="font-medium mb-3">เพิ่มรายการเทรด</h3>
               <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -203,7 +261,21 @@ export default function GoldTradeJournal(){
 
         {/* HISTORY */}
         {tab==='history' && (
-          <section className="bg-white border rounded-lg p-4">
+                      <section className="bg-white border rounded-lg p-4">
+              <h3 className="font-medium mb-3">สถิติโดยละเอียด</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+                <StatItem label="กำไรขั้นต้น (Gross Profit)" value={stats.grossProfit.toFixed(2)} color="text-emerald-600" />
+                <StatItem label="ขาดทุนขั้นต้น (Gross Loss)" value={stats.grossLoss.toFixed(2)} color="text-red-600" />
+                <StatItem label="ชนะสูงสุด (Largest Win)" value={stats.largestWin.toFixed(2)} color="text-emerald-600" />
+                <StatItem label="แพ้สูงสุด (Largest Loss)" value={stats.largestLoss.toFixed(2)} color="text-red-600" />
+                <StatItem label="Avg. Win" value={stats.avgWin.toFixed(2)} color="text-emerald-600" />
+                <StatItem label="Avg. Loss" value={stats.avgLose.toFixed(2)} color="text-red-600" />
+                <StatItem label="Ratio (Avg Win/Loss)" value={stats.avgLose===0?'Inf':(Math.abs(stats.avgWin/stats.avgLose)).toFixed(2)} color="text-blue-600" />
+                <StatItem label="Expectancy" value={(stats.winRate/100*stats.avgWin + (1-stats.winRate/100)*stats.avgLose).toFixed(2)} color="text-violet-600" />
+              </div>
+            </section>
+
+            <section className="bg-white border rounded-lg p-4">
             <div className="flex flex-wrap gap-2 items-center mb-3">
               <h2 className="font-medium mr-auto">ประวัติ ({filtered.length})</h2>
               <div className="flex items-center gap-2">
@@ -301,6 +373,24 @@ function FlatCard({color,icon,value,label,sub}:{color:string,icon:React.ReactNod
         </div>
         <div className="h-10 w-10 rounded-full bg-white grid place-items-center">{icon}</div>
       </div>
+    </div>
+  )
+}
+
+function StatItem({label,value,color}:{label:string,value:string,color:string}){
+  return (
+    <div className="flex flex-col">
+      <div className="text-slate-500">{label}</div>
+      <div className={cls("font-semibold text-lg", color)}>{value}</div>
+    </div>
+  )
+}
+
+function StatItem({label,value,color}:{label:string,value:string,color:string}){
+  return (
+    <div className="flex flex-col">
+      <div className="text-slate-500">{label}</div>
+      <div className={cls("font-semibold text-lg", color)}>{value}</div>
     </div>
   )
 }
