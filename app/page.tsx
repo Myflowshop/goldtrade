@@ -33,7 +33,7 @@ function toISOFromDateTime(dateStr: string, timeStr: string){ try{ const [y,m,d]
 function formatThaiDate(iso:string){ return new Date(iso).toLocaleDateString('th-TH',{year:'numeric',month:'2-digit',day:'2-digit'}) }
 function formatThaiTime(iso:string){ return new Date(iso).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) }
 
-export default function Home(): JSX.Element {
+export default function Home() {
   // FX only (no XAU realtime)
   const [usdThb,setUsdThb]=useState<number|null>(null)
 
