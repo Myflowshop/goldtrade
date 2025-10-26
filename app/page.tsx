@@ -9,7 +9,7 @@ const LS_TRADES = 'gold_trade_data_v7'
 const LS_SETTINGS = 'gold_trade_settings_v5'
 
 // Types
- type TradeRow = {
+type TradeRow = {
   id: string
   dateISO: string
   dateLabel: string
@@ -23,7 +23,7 @@ const LS_SETTINGS = 'gold_trade_settings_v5'
   tag: string
 }
 
- type Settings = { startingBalanceUSD: number }
+type Settings = { startingBalanceUSD: number }
 
 // Utils
 const cls = (...xs: Array<string | false | undefined | null>) => xs.filter(Boolean).join(' ')
